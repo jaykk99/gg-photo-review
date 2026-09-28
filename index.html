@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="description" content="Gutter Genie job photo review — review contact sheets of job photos, mark sheets reviewed or flagged.">
+<title>GG Photo Review — Gutter Genie</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box;font-family:'Segoe UI',system-ui,sans-serif}
+body{background:#0b1f16;color:#e8f5ee;min-height:100vh;padding:24px}
+.wrap{max-width:1100px;margin:0 auto}
+header{display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px;margin-bottom:8px}
+h1{color:#4ade80;font-size:24px}
+.sub{color:#9dc7af;font-size:14px;margin-bottom:20px}
+#progress{font-size:13px;color:#9dc7af;margin-bottom:16px}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:16px}
+.sheet{background:#0f2b1f;border:1px solid #1d4432;border-radius:14px;overflow:hidden;cursor:pointer;transition:.15s}
+.sheet:hover{border-color:#4ade80;transform:translateY(-2px)}
+.sheet img{width:100%;height:180px;object-fit:cover;display:block;background:#000}
+.sheet .meta{padding:12px}
+.sheet .fname{font-size:14px;font-weight:600;color:#fff;word-break:break-all}
+.sheet .row{display:flex;gap:8px;margin-top:10px;align-items:center}
+.badge{font-size:11px;padding:3px 10px;border-radius:20px;text-transform:uppercase;letter-spacing:.5px}
+.badge.unreviewed{background:#3b3b1d;color:#fde047}
+.badge.reviewed{background:#1d5b3c;color:#4ade80}
+.badge.flagged{background:#5f1e1e;color:#f87171}
+button{background:#1d5b3c;border:1px solid #2f855a;color:#fff;padding:7px 12px;border-radius:8px;cursor:pointer;font-size:12px}
+button:hover{background:#247248}
+button.ghost{background:transparent;border-color:#1d4432}
+.note{font-size:12px;color:#9dc7af;margin-top:8px;word-break:break-word}
+#lightbox{display:none;position:fixed;inset:0;background:rgba(0,0,0,.92);z-index:100;align-items:center;justify-content:center;flex-direction:column;padding:20px}
+#lightbox img{max-width:92vw;max-height:78vh;border-radius:8px;background:#000}
+#lbClose{position:absolute;top:16px;right:16px;background:none;border:none;color:#fff;font-size:1.8rem;cursor:pointer}
+#lbMeta{color:#9dc7af;margin-top:10px;font-size:.9rem;text-align:center}
+#lbActions{display:flex;gap:10px;margin-top:12px;flex-wrap:wrap;justify-content:center}
+</style>
+</head>
+<body>
+<div class="wrap">
+<header>
+  <h1>📷 GG Photo Review</h1>
+  <button class="ghost" onclick="resetAll()">Reset reviews</button>
+</header>
+<div class="sub">Contact sheets of Gutter Genie job photos. Click a sheet to view it full-size, then mark it reviewed or flagged.</div>
+<div id="progress"></div>
+<div class="grid" id="grid"></div>
+</div>
+
+<div id="lightbox">
+  <button id="lbClose" onclick="closeLb()">✕</button>
+  <img id="lbImg" alt="Contact sheet full-size">
+  <div id="lbMeta"></div>
+  <div id="lbActions">
+    <button onclick="mark(current,'reviewed')">✓ Mark reviewed</button>
+    <button class="ghost" onclick="mark(current,'flagged')">🚩 Flag for follow-up</button>
+  </div>
+</div>
+
+<script>
+// Sheets in this repo. Add new contact-sheet JPGs to the array and they appear automatically.
+const SHEETS=['sheet_00.jpg','sheet_01.jpg','sheet_02.jpg','sheet_03.jpg'];
+const LS_KEY='gg_photo_review_state';
+function readState(){try{return JSON.parse(localStorage.getItem(LS_KEY)||'{}');}catch(e){return{};}}
+function writeState(s){try{localStorage.setItem(LS_KEY,JSON.stringify(s));}catch(e){}}
+let state=readState(), current=null;
+
+function render(){
+  const grid=document.getElementById('grid');
+  grid.innerHTML='';
+  let done=0;
+  SHEETS.forEach(name=>{
+    const st=(state[name]&&state[name].status)||'unreviewed';
+    if(st==='reviewed')done++;
+    const card=document.createElement('div');
+    card.className='sheet';
+    card.innerHTML='<img src="'+encodeURI(name)+'" alt="'+name+'" loading="lazy">'+
+      '<div class="meta"><div class="fname">'+name+'</div>'+
+      '<div class="row"><span class="badge '+st+'">'+st+'</span>'+
+      (st!=='reviewed'?'<button onclick="event.stopPropagation();mark(\''+name+'\',\'reviewed\')">✓ Reviewed</button>':'')+
+      (st!=='flagged'?'<button class="ghost" onclick="event.stopPropagation();mark(\''+name+'\',\'flagged\')">🚩 Flag</button>':'')+
+      '</div>'+(state[name]&&state[name].at?'<div class="note">'+state[name].at+'</div>':'')+'</div>';
+    card.onclick=()=>openLb(name);
+    grid.appendChild(card);
+  });
+  document.getElementById('progress').textContent='Reviewed '+done+' / '+SHEETS.length+' sheets';
+}
+function mark(name,status){
+  state[name]={status:status,at:new Date().toLocaleString()};
+  writeState(state);render();closeLb();
+}
+function resetAll(){
+  if(!confirm('Clear all review marks?'))return;
+  state={};writeState(state);render();
+}
+function openLb(name){
+  current=name;
+  document.getElementById('lbImg').src=name;
+  document.getElementById('lbMeta').textContent=name+' — click ✓ or 🚩 below, or Esc to close';
+  document.getElementById('lightbox').style.display='flex';
+}
+function closeLb(){document.getElementById('lightbox').style.display='none';}
+document.addEventListener('keydown',e=>{if(e.key==='Escape')closeLb();});
+render();
+</script>
+</body>
+</html>
