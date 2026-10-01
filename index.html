@@ -3,104 +3,205 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<meta name="description" content="Gutter Genie job photo review — review contact sheets of job photos, mark sheets reviewed or flagged.">
+<meta name="description" content="Gutter Genie job photo review — pair before/after photos, rate and approve picks, export your selections.">
 <title>GG Photo Review — Gutter Genie</title>
 <style>
-*{margin:0;padding:0;box-sizing:border-box;font-family:'Segoe UI',system-ui,sans-serif}
-body{background:#0b1f16;color:#e8f5ee;min-height:100vh;padding:24px}
-.wrap{max-width:1100px;margin:0 auto}
-header{display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px;margin-bottom:8px}
-h1{color:#4ade80;font-size:24px}
-.sub{color:#9dc7af;font-size:14px;margin-bottom:20px}
-#progress{font-size:13px;color:#9dc7af;margin-bottom:16px}
-.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:16px}
-.sheet{background:#0f2b1f;border:1px solid #1d4432;border-radius:14px;overflow:hidden;cursor:pointer;transition:.15s}
-.sheet:hover{border-color:#4ade80;transform:translateY(-2px)}
-.sheet img{width:100%;height:180px;object-fit:cover;display:block;background:#000}
-.sheet .meta{padding:12px}
-.sheet .fname{font-size:14px;font-weight:600;color:#fff;word-break:break-all}
-.sheet .row{display:flex;gap:8px;margin-top:10px;align-items:center}
-.badge{font-size:11px;padding:3px 10px;border-radius:20px;text-transform:uppercase;letter-spacing:.5px}
-.badge.unreviewed{background:#3b3b1d;color:#fde047}
-.badge.reviewed{background:#1d5b3c;color:#4ade80}
-.badge.flagged{background:#5f1e1e;color:#f87171}
-button{background:#1d5b3c;border:1px solid #2f855a;color:#fff;padding:7px 12px;border-radius:8px;cursor:pointer;font-size:12px}
+:root{
+  --bg:#0b1f16; --panel:#0f2b1f; --panel2:#123425; --line:#1d4432;
+  --txt:#e8f5ee; --dim:#9dc7af; --acc:#4ade80; --acc-d:#1d5b3c;
+  --warn:#fde047; --bad:#f87171; --star:#fbbf24;
+}
+*{margin:0;padding:0;box-sizing:border-box;font-family:'Segoe UI',system-ui,-apple-system,sans-serif}
+body{background:var(--bg);color:var(--txt);min-height:100vh}
+.wrap{max-width:1200px;margin:0 auto;padding:20px 24px 80px}
+header.top{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:6px}
+h1{color:var(--acc);font-size:24px}
+h1 .sub-t{font-size:13px;color:var(--dim);font-weight:400;margin-left:8px}
+.top-actions{display:flex;gap:8px;flex-wrap:wrap}
+button{background:var(--acc-d);border:1px solid #2f855a;color:#fff;padding:8px 14px;border-radius:10px;cursor:pointer;font-size:13px;font-weight:600}
 button:hover{background:#247248}
-button.ghost{background:transparent;border-color:#1d4432}
-.note{font-size:12px;color:#9dc7af;margin-top:8px;word-break:break-word}
-#lightbox{display:none;position:fixed;inset:0;background:rgba(0,0,0,.92);z-index:100;align-items:center;justify-content:center;flex-direction:column;padding:20px}
-#lightbox img{max-width:92vw;max-height:78vh;border-radius:8px;background:#000}
-#lbClose{position:absolute;top:16px;right:16px;background:none;border:none;color:#fff;font-size:1.8rem;cursor:pointer}
-#lbMeta{color:#9dc7af;margin-top:10px;font-size:.9rem;text-align:center}
-#lbActions{display:flex;gap:10px;margin-top:12px;flex-wrap:wrap;justify-content:center}
+button.ghost{background:transparent;border-color:var(--line);color:var(--dim)}
+button.ghost:hover{color:#fff;border-color:var(--acc)}
+button.danger{background:#5f1e1e;border-color:#7f2a2a}
+button:disabled{opacity:.45;cursor:default}
+button.on{background:var(--acc);color:#06281a;border-color:var(--acc)}
+.hint{color:var(--dim);font-size:13px;margin-bottom:14px}
+.progress-wrap{margin:10px 0 18px}
+.progress-row{display:flex;justify-content:space-between;font-size:13px;color:var(--dim);margin-bottom:6px}
+.bar{height:10px;background:#07130d;border:1px solid var(--line);border-radius:8px;overflow:hidden}
+.bar>div{height:100%;background:linear-gradient(90deg,#22c55e,#4ade80);width:0;transition:width .25s}
+/* view toggle + toolbar */
+.toolbar{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:14px}
+.toolbar .seg{display:flex;border:1px solid var(--line);border-radius:10px;overflow:hidden}
+.toolbar .seg button{border:none;border-radius:0;background:transparent;color:var(--dim)}
+.toolbar .seg button.on{background:var(--acc-d);color:#fff}
+.chips{display:flex;gap:6px;flex-wrap:wrap}
+.chip{padding:6px 12px;border-radius:20px;border:1px solid var(--line);background:transparent;color:var(--dim);font-size:12px}
+.chip.on{background:var(--acc-d);color:#fff;border-color:#2f855a}
+#search{background:#07130d;border:1px solid var(--line);color:var(--txt);padding:8px 12px;border-radius:10px;font-size:13px;min-width:160px}
+/* review view */
+#viewer{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+#viewer.single-col{grid-template-columns:1fr;max-width:720px;margin:0 auto}
+.photo-card{background:var(--panel);border:2px solid var(--line);border-radius:16px;overflow:hidden;cursor:pointer;position:relative;transition:border-color .15s}
+.photo-card.focused{border-color:var(--acc)}
+.photo-card img{width:100%;height:min(52vh,460px);object-fit:contain;display:block;background:#000}
+.photo-card .cap{padding:10px 14px;border-top:1px solid var(--line)}
+.tag{display:inline-block;font-size:11px;font-weight:700;letter-spacing:1px;text-transform:uppercase;padding:3px 10px;border-radius:6px;margin-bottom:6px}
+.tag.before{background:#1e3a5f;color:#93c5fd}
+.tag.after{background:#14532d;color:#86efac}
+.tag.single{background:#3b3b1d;color:#fde047}
+.fname{font-size:13px;color:var(--dim);word-break:break-all;margin-bottom:8px}
+.stars{display:flex;gap:2px;margin:6px 0}
+.star{font-size:26px;color:#334155;cursor:pointer;background:none;border:none;padding:2px}
+.star.lit{color:var(--star)}
+.mini-actions{display:flex;gap:6px;flex-wrap:wrap;margin:8px 0}
+.mini-actions button{font-size:12px;padding:6px 10px}
+.badge{font-size:11px;padding:3px 10px;border-radius:20px;text-transform:uppercase;letter-spacing:.5px;display:inline-block}
+.badge.unreviewed{background:#3b3b1d;color:var(--warn)}
+.badge.approved{background:#1d5b3c;color:var(--acc)}
+.badge.rejected{background:#3a2b2b;color:#fca5a5}
+.badge.flagged{background:#5f1e1e;color:var(--bad)}
+.note-in{width:100%;background:#07130d;border:1px solid var(--line);color:var(--txt);border-radius:8px;padding:7px 10px;font-size:13px;margin-top:6px;resize:vertical;min-height:34px}
+.nav-row{display:flex;align-items:center;justify-content:space-between;gap:10px;margin:16px 0}
+.nav-row .pos{font-size:14px;color:var(--dim)}
+.pair-actions{display:flex;gap:8px;flex-wrap:wrap;justify-content:center;margin-top:4px}
+.kbd-hint{font-size:12px;color:var(--dim);text-align:center;margin-top:14px}
+kbd{background:#07130d;border:1px solid var(--line);border-radius:5px;padding:1px 7px;font-size:11px;font-family:monospace}
+/* grid view */
+#gridview .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:14px}
+.sheet{background:var(--panel);border:1px solid var(--line);border-radius:14px;overflow:hidden;cursor:pointer;transition:.15s;position:relative}
+.sheet:hover{border-color:var(--acc);transform:translateY(-2px)}
+.sheet.sel{border-color:var(--warn);box-shadow:0 0 0 2px var(--warn)}
+.sheet img{width:100%;height:160px;object-fit:cover;display:block;background:#000}
+.sheet .meta{padding:10px 12px}
+.sheet .row{display:flex;gap:6px;margin-top:8px;align-items:center;flex-wrap:wrap}
+.sheet .stars .star{font-size:16px}
+.pickbox{position:absolute;top:8px;left:8px;width:22px;height:22px;accent-color:var(--acc);cursor:pointer;z-index:2}
+#batchbar{position:fixed;bottom:0;left:0;right:0;background:#0a1a12f2;border-top:1px solid var(--line);padding:12px 20px;display:none;gap:10px;align-items:center;justify-content:center;flex-wrap:wrap;z-index:50}
+#batchbar.show{display:flex}
+/* overlays */
+.overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.9);z-index:100;align-items:center;justify-content:center;flex-direction:column;padding:20px}
+.overlay.show{display:flex}
+.overlay img{max-width:94vw;max-height:86vh;border-radius:8px;background:#000}
+.overlay .x{position:absolute;top:14px;right:18px;background:none;border:none;color:#fff;font-size:2rem;cursor:pointer}
+.help-card{background:var(--panel2);border:1px solid var(--line);border-radius:16px;padding:24px 28px;max-width:520px;max-height:86vh;overflow:auto}
+.help-card h2{color:var(--acc);margin-bottom:14px}
+.help-card table{width:100%;border-collapse:collapse;font-size:13px}
+.help-card td{padding:6px 4px;border-bottom:1px solid var(--line)}
+.help-card td:first-child{white-space:nowrap;width:130px}
+/* toasts */
+#toasts{position:fixed;bottom:20px;right:20px;display:flex;flex-direction:column;gap:8px;z-index:200}
+.toast{background:var(--panel2);border:1px solid var(--acc);border-radius:10px;padding:10px 16px;font-size:13px;box-shadow:0 4px 18px #000a}
+.toast button{margin-left:10px;font-size:12px;padding:4px 10px}
+/* fullscreen */
+#viewer:fullscreen{background:var(--bg);padding:24px;overflow:auto}
+#viewer.fs-fallback{position:fixed;inset:0;z-index:90;background:var(--bg);padding:24px;overflow:auto}
+.dz{outline:2px dashed var(--acc);outline-offset:-6px}
+@media (max-width:760px){
+  #viewer{grid-template-columns:1fr}
+  .photo-card img{height:min(44vh,380px)}
+  .wrap{padding:14px 12px 90px}
+  h1{font-size:20px}
+}
 </style>
 </head>
 <body>
 <div class="wrap">
-<header>
-  <h1>📷 GG Photo Review</h1>
-  <button class="ghost" onclick="resetAll()">Reset reviews</button>
-</header>
-<div class="sub">Contact sheets of Gutter Genie job photos. Click a sheet to view it full-size, then mark it reviewed or flagged.</div>
-<div id="progress"></div>
-<div class="grid" id="grid"></div>
-</div>
+  <header class="top">
+    <h1>📷 GG Photo Review<span class="sub-t">Gutter Genie job photos</span></h1>
+    <div class="top-actions">
+      <button class="ghost" id="btnHelp" title="Keyboard shortcuts (?)">⌨ Shortcuts</button>
+      <button class="ghost" id="btnUndo" title="Undo last change (Ctrl+Z)" disabled>↩ Undo</button>
+      <button class="ghost" id="btnAdd" title="Add photos from this device (session only)">＋ Add photos</button>
+      <button class="ghost" id="btnJSON" title="Download picks as JSON">⬇ JSON</button>
+      <button class="ghost" id="btnCSV" title="Download picks as CSV">⬇ CSV</button>
+      <button class="ghost" id="btnReset">Reset</button>
+    </div>
+  </header>
+  <div class="hint">Review before/after pairs side by side. Rate <b>1–5</b>, approve <kbd>A</kbd>, reject <kbd>R</kbd>, flag <kbd>X</kbd>. Hold <kbd>Shift</kbd> to apply to the whole pair.</div>
 
-<div id="lightbox">
-  <button id="lbClose" onclick="closeLb()">✕</button>
-  <img id="lbImg" alt="Contact sheet full-size">
-  <div id="lbMeta"></div>
-  <div id="lbActions">
-    <button onclick="mark(current,'reviewed')">✓ Mark reviewed</button>
-    <button class="ghost" onclick="mark(current,'flagged')">🚩 Flag for follow-up</button>
+  <div class="progress-wrap">
+    <div class="progress-row"><span id="progText">Reviewed 0 / 0</span><span id="progPairs"></span></div>
+    <div class="bar"><div id="progBar"></div></div>
+  </div>
+
+  <div class="toolbar">
+    <div class="seg">
+      <button id="tabReview" class="on">🔍 Review</button>
+      <button id="tabGrid">🗂 Grid</button>
+    </div>
+    <div class="chips" id="filters">
+      <button class="chip on" data-f="all">All</button>
+      <button class="chip" data-f="unreviewed">Unreviewed</button>
+      <button class="chip" data-f="approved">Approved</button>
+      <button class="chip" data-f="rejected">Rejected</button>
+      <button class="chip" data-f="flagged">Flagged</button>
+    </div>
+    <input id="search" placeholder="Search filename…">
+  </div>
+
+  <div id="reviewview">
+    <div class="nav-row">
+      <button id="btnPrev" class="ghost">◀ Prev</button>
+      <span class="pos" id="pairPos"></span>
+      <button id="btnNext" class="ghost">Next ▶</button>
+    </div>
+    <div id="viewer"></div>
+    <div class="pair-actions">
+      <button id="btnFs" class="ghost">⤢ Fullscreen (F)</button>
+      <button id="btnApprovePair">✓ Approve pair (⇧A)</button>
+      <button id="btnRejectPair" class="ghost">✕ Reject pair (⇧R)</button>
+      <button id="btnFlagPair" class="ghost">🚩 Flag pair (⇧X)</button>
+      <button id="btnClearPair" class="ghost">Clear (⇧C)</button>
+    </div>
+    <div class="kbd-hint"><kbd>←</kbd><kbd>→</kbd> navigate · <kbd>1</kbd>–<kbd>5</kbd> rate · <kbd>A</kbd>/<kbd>R</kbd>/<kbd>X</kbd> mark focused photo (hold <kbd>Shift</kbd> for pair) · <kbd>0</kbd> clear rating · <kbd>F</kbd> fullscreen · <kbd>?</kbd> help</div>
+  </div>
+
+  <div id="gridview" style="display:none">
+    <div class="grid" id="grid"></div>
   </div>
 </div>
 
-<script>
-// Sheets in this repo. Add new contact-sheet JPGs to the array and they appear automatically.
-const SHEETS=['sheet_00.jpg','sheet_01.jpg','sheet_02.jpg','sheet_03.jpg'];
-const LS_KEY='gg_photo_review_state';
-function readState(){try{return JSON.parse(localStorage.getItem(LS_KEY)||'{}');}catch(e){return{};}}
-function writeState(s){try{localStorage.setItem(LS_KEY,JSON.stringify(s));}catch(e){}}
-let state=readState(), current=null;
+<div id="batchbar">
+  <span id="batchCount"></span>
+  <button id="bApprove">✓ Approve</button>
+  <button id="bReject" class="ghost">✕ Reject</button>
+  <button id="bFlag" class="ghost">🚩 Flag</button>
+  <select id="bRate" style="background:#07130d;color:#fff;border:1px solid var(--line);border-radius:8px;padding:7px">
+    <option value="">Set rating…</option><option>5</option><option>4</option><option>3</option><option>2</option><option>1</option><option value="0">Clear</option>
+  </select>
+  <button id="bClear" class="ghost">Clear selection</button>
+</div>
 
-function render(){
-  const grid=document.getElementById('grid');
-  grid.innerHTML='';
-  let done=0;
-  SHEETS.forEach(name=>{
-    const st=(state[name]&&state[name].status)||'unreviewed';
-    if(st==='reviewed')done++;
-    const card=document.createElement('div');
-    card.className='sheet';
-    card.innerHTML='<img src="'+encodeURI(name)+'" alt="'+name+'" loading="lazy">'+
-      '<div class="meta"><div class="fname">'+name+'</div>'+
-      '<div class="row"><span class="badge '+st+'">'+st+'</span>'+
-      (st!=='reviewed'?'<button onclick="event.stopPropagation();mark(\''+name+'\',\'reviewed\')">✓ Reviewed</button>':'')+
-      (st!=='flagged'?'<button class="ghost" onclick="event.stopPropagation();mark(\''+name+'\',\'flagged\')">🚩 Flag</button>':'')+
-      '</div>'+(state[name]&&state[name].at?'<div class="note">'+state[name].at+'</div>':'')+'</div>';
-    card.onclick=()=>openLb(name);
-    grid.appendChild(card);
-  });
-  document.getElementById('progress').textContent='Reviewed '+done+' / '+SHEETS.length+' sheets';
-}
-function mark(name,status){
-  state[name]={status:status,at:new Date().toLocaleString()};
-  writeState(state);render();closeLb();
-}
-function resetAll(){
-  if(!confirm('Clear all review marks?'))return;
-  state={};writeState(state);render();
-}
-function openLb(name){
-  current=name;
-  document.getElementById('lbImg').src=name;
-  document.getElementById('lbMeta').textContent=name+' — click ✓ or 🚩 below, or Esc to close';
-  document.getElementById('lightbox').style.display='flex';
-}
-function closeLb(){document.getElementById('lightbox').style.display='none';}
-document.addEventListener('keydown',e=>{if(e.key==='Escape')closeLb();});
-render();
-</script>
+<div class="overlay" id="zoomOv">
+  <button class="x" id="zoomX">✕</button>
+  <img id="zoomImg" alt="Zoomed photo">
+  <div class="fname" id="zoomCap" style="margin-top:10px"></div>
+</div>
+
+<div class="overlay" id="helpOv">
+  <div class="help-card">
+    <h2>⌨ Keyboard shortcuts</h2>
+    <table>
+      <tr><td><kbd>←</kbd> <kbd>→</kbd></td><td>Previous / next pair</td></tr>
+      <tr><td><kbd>1</kbd>–<kbd>5</kbd></td><td>Star rating for focused photo</td></tr>
+      <tr><td><kbd>0</kbd></td><td>Clear rating</td></tr>
+      <tr><td><kbd>A</kbd> / <kbd>R</kbd> / <kbd>X</kbd></td><td>Approve / Reject / Flag focused photo</td></tr>
+      <tr><td><kbd>⇧A</kbd> <kbd>⇧R</kbd> <kbd>⇧X</kbd></td><td>Same, applied to the whole pair</td></tr>
+      <tr><td><kbd>⇧C</kbd></td><td>Clear pair marks</td></tr>
+      <tr><td><kbd>F</kbd></td><td>Toggle fullscreen viewer</td></tr>
+      <tr><td><kbd>Ctrl</kbd>+<kbd>Z</kbd></td><td>Undo last change</td></tr>
+      <tr><td><kbd>Esc</kbd></td><td>Close overlay</td></tr>
+      <tr><td><kbd>?</kbd></td><td>This help</td></tr>
+    </table>
+    <p style="margin-top:12px;font-size:12px;color:var(--dim)">Swipe left/right on mobile to move between pairs. Click a photo to focus it (green ring); double-click to zoom.</p>
+    <button id="helpClose" style="margin-top:14px">Close</button>
+  </div>
+</div>
+
+<div id="toasts"></div>
+<input type="file" id="fileInput" accept="image/*" multiple style="display:none">
+<script src="logic.js"></script>
+<script src="app.js"></script>
 </body>
 </html>
