@@ -1,4 +1,4 @@
-/* gg-photo-review UI — review pairs, rate, approve/reject, export picks.
+/* gg-photo-review UI: review pairs, rate, approve/reject, export picks.
  * Pure state logic lives in logic.js (window.GGReviewLogic). */
 (function () {
 'use strict';
@@ -378,7 +378,7 @@ function addFiles(files) {
   });
   if (added) {
     rebuild();
-    toast(added + ' photo(s) added — uploads are session-only, export before closing.', false);
+    toast(added + ' photo(s) added. Uploads are session-only, export before closing.', false);
   }
 }
 

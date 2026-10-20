@@ -1,4 +1,4 @@
-/* gg-photo-review — pure logic (no DOM).
+/* gg-photo-review : pure logic (no DOM).
  * Loaded in the browser as a plain script (window.GGReviewLogic) and in
  * Node for tests (module.exports). Keep it dependency-free. */
 (function (root, factory) {
@@ -103,7 +103,7 @@
       }
     });
 
-    // Pass 2: timestamp grouping — same date prefix, pair by ascending time.
+    // Pass 2: timestamp grouping : same date prefix, pair by ascending time.
     var rest = list.filter(function (it) { return !used[it.id]; });
     var byDate = {};
     rest.forEach(function (it) {
@@ -121,7 +121,7 @@
       }
     });
 
-    // Pass 3: numeric sequence pairing — same prefix, consecutive numbers.
+    // Pass 3: numeric sequence pairing : same prefix, consecutive numbers.
     rest = list.filter(function (it) { return !used[it.id]; });
     var byPrefix = {};
     rest.forEach(function (it) {
