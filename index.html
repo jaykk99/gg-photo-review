@@ -17,7 +17,9 @@ body{background:var(--bg);color:var(--txt);min-height:100vh}
 header.top{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:6px}
 h1{color:var(--acc);font-size:24px}
 h1 .sub-t{font-size:13px;color:var(--dim);font-weight:400;margin-left:8px}
-.top-actions{display:flex;gap:8px;flex-wrap:wrap}
+.top-actions{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.expf{display:flex;align-items:center;gap:6px;font-size:12px;color:var(--dim);cursor:pointer}
+.expf input{accent-color:var(--acc);width:15px;height:15px}
 button{background:var(--acc-d);border:1px solid #2f855a;color:#fff;padding:8px 14px;border-radius:10px;cursor:pointer;font-size:13px;font-weight:600}
 button:hover{background:#247248}
 button.ghost{background:transparent;border-color:var(--line);color:var(--dim)}
@@ -128,6 +130,7 @@ kbd{background:#07130d;border:1px solid var(--line);border-radius:5px;padding:1p
       <button class="ghost" id="btnSheet" title="Download printable HTML contact sheet of picks">⬇ Sheet</button>
       <button class="ghost" id="btnSave" title="Save review session (marks, ratings, notes, manual pairs) as JSON">💾 Save session</button>
       <button class="ghost" id="btnLoad" title="Load a saved review session from JSON">📂 Load session</button>
+      <label class="expf" title="Exports only include the photos shown by the current filter"><input type="checkbox" id="expFiltered"> filtered only</label>
       <button class="ghost" id="btnReset">Reset</button>
     </div>
   </header>

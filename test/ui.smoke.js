@@ -270,6 +270,16 @@ click(document.querySelector('#btnRejectAll'));
 assert.equal(progText(document), 'Reviewed 154 / 154 photos', 'reject-all keeps reviewed count');
 assert.equal(document.querySelector('.photo-card .badge').textContent, 'rejected', 'reject-all flips statuses');
 
+// ---- filtered export ----------------------------------------------------------
+document.querySelector('#expFiltered').checked = true;
+click(document.querySelector('#filters .chip[data-f="approved"]'));
+click(document.querySelector('#btnJSON'));
+const filtPayload = JSON.parse(downloads[downloads.length - 1].content);
+assert.equal(filtPayload.picks.length, 0, 'filtered export respects the status filter');
+assert.equal(filtPayload.totals.photos, 0, 'filtered totals match');
+assert.ok(lastToast(document).includes('(filtered)'), 'filtered toast tag');
+document.querySelector('#expFiltered').checked = false;
+
 console.log('UI smoke tests passed (jsdom).');
 }
 

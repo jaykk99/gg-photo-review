@@ -204,25 +204,40 @@ function stamp() {
   function p(x) { return (x < 10 ? '0' : '') + x; }
   return d.getFullYear() + p(d.getMonth() + 1) + p(d.getDate()) + '-' + p(d.getHours()) + p(d.getMinutes());
 }
+function exportPayload() {
+  // when "filtered only" is ticked, export just what the current filter shows
+  if ($('#expFiltered').checked) {
+    var fp = filteredPairs();
+    var seen = {}, fi = [];
+    fp.forEach(function (p) {
+      L.pairPhotosOf(p).forEach(function (ph) {
+        if (!seen[ph.id]) { seen[ph.id] = true; var it = itemById(ph.id); if (it) fi.push(it); }
+      });
+    });
+    return L.buildExport(state, fi, fp);
+  }
+  return L.buildExport(state, items, pairs);
+}
+function filtTag() { return $('#expFiltered').checked ? ' (filtered)' : ''; }
 function exportJSON() {
-  var payload = L.buildExport(state, items, pairs);
+  var payload = exportPayload();
   download('gg-picks-' + stamp() + '.json', JSON.stringify(payload, null, 2), 'application/json');
-  toast('Exported ' + payload.picks.length + ' picks as JSON', false);
+  toast('Exported ' + payload.picks.length + ' picks as JSON' + filtTag(), false);
 }
 function exportCSV() {
-  var payload = L.buildExport(state, items, pairs);
+  var payload = exportPayload();
   download('gg-picks-' + stamp() + '.csv', L.exportCSV(payload), 'text/csv');
-  toast('Exported picks as CSV', false);
+  toast('Exported picks as CSV' + filtTag(), false);
 }
 function exportMarkdown() {
-  var payload = L.buildExport(state, items, pairs);
+  var payload = exportPayload();
   download('gg-report-' + stamp() + '.md', L.exportMarkdown(payload), 'text/markdown');
-  toast('Exported review report as Markdown', false);
+  toast('Exported review report as Markdown' + filtTag(), false);
 }
 function exportContactSheet() {
-  var payload = L.buildExport(state, items, pairs);
+  var payload = exportPayload();
   download('gg-contact-sheet-' + stamp() + '.html', L.exportContactSheetHTML(payload), 'text/html');
-  toast('Exported printable contact sheet (HTML)', false);
+  toast('Exported printable contact sheet (HTML)' + filtTag(), false);
 }
 function saveSession() {
   download('gg-session-' + stamp() + '.json', L.serializeSession(state, manualPairs), 'application/json');
