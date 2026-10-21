@@ -425,6 +425,22 @@ function batch(patch, verb) {
   applyChange('Batch ' + verb + ' (' + ids.length + ')', ids, patch);
   selection.clear();
 }
+// Apply a status to every photo in the current review filter at once.
+function markAllShown(status, verb) {
+  var fps = filteredPairs();
+  var ids = [];
+  fps.forEach(function (p) {
+    L.pairPhotosOf(p).forEach(function (it) { ids.push(it.id); });
+  });
+  if (!ids.length) { toast('Nothing matches the current filter', false); return; }
+  if (!confirm(verb + ' ' + ids.length + ' photos shown by the current filter?')) return;
+  applyChange(verb + ' all shown (' + ids.length + ')', ids, { status: status });
+}
+function selectAllShown() {
+  filteredItems().forEach(function (it) { selection.add(it.id); });
+  renderGrid(); renderBatchBar();
+  toast(selection.size + ' photos selected', false);
+}
 
 function setView(v) {
   view = v;
@@ -529,6 +545,8 @@ function bind() {
   $('#btnRejectPair').onclick = function () { markFocused({ status: 'rejected' }, true, 'Rejected pair'); };
   $('#btnFlagPair').onclick = function () { markFocused({ status: 'flagged' }, true, 'Flagged pair'); };
   $('#btnClearPair').onclick = function () { markFocused({ status: 'unreviewed', rating: 0 }, true, 'Cleared pair'); };
+  $('#btnApproveAll').onclick = function () { markAllShown('approved', 'Approve'); };
+  $('#btnRejectAll').onclick = function () { markAllShown('rejected', 'Reject'); };
   $('#btnFs').onclick = toggleFs;
   $('#btnUndo').onclick = doUndo;
   $('#btnJSON').onclick = exportJSON;
@@ -570,6 +588,7 @@ function bind() {
   $('#gridSort').addEventListener('change', function (e) {
     gridSort = e.target.value; resetGridLimit(); renderGrid();
   });
+  $('#btnSelectAll').onclick = selectAllShown;
 
   // drag & drop anywhere
   var dzT = null;

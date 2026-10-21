@@ -196,6 +196,12 @@ assert.ok(lastToast(document).includes('Batch approve (3)'), 'batch approve toas
 // uploads (all unreviewed): 2 earlier + 3 new = 5
 assert.equal(progText(document), 'Reviewed 5 / 154 photos', 'batch approve marks selection');
 
+// ---- select all shown + batch -----------------------------------------------
+click(document.querySelector('#btnSelectAll'));
+assert.equal(document.querySelector('#batchCount').textContent, '154 selected', 'select all');
+click(document.querySelector('#bApprove'));
+assert.equal(progText(document), 'Reviewed 154 / 154 photos', 'select-all then batch approve');
+
 // ---- zoom keyboard nav ------------------------------------------------------
 click(document.querySelector('#tabReview'));
 const zimg = document.querySelector('.photo-card img');
@@ -257,6 +263,12 @@ await new Promise((resolve, reject) => {
   })();
 });
 assert.ok(lastToast(document).includes('Session loaded'), 'session load toast');
+
+// ---- reject all shown (review view, confirm stubbed) -------------------------
+click(document.querySelector('#tabReview'));
+click(document.querySelector('#btnRejectAll'));
+assert.equal(progText(document), 'Reviewed 154 / 154 photos', 'reject-all keeps reviewed count');
+assert.equal(document.querySelector('.photo-card .badge').textContent, 'rejected', 'reject-all flips statuses');
 
 console.log('UI smoke tests passed (jsdom).');
 }

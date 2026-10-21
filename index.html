@@ -168,6 +168,8 @@ kbd{background:#07130d;border:1px solid var(--line);border-radius:5px;padding:1p
       <button id="btnRejectPair" class="ghost">✕ Reject pair (⇧R)</button>
       <button id="btnFlagPair" class="ghost">🚩 Flag pair (⇧X)</button>
       <button id="btnClearPair" class="ghost">Clear (⇧C)</button>
+      <button id="btnApproveAll" class="ghost" title="Approve every photo in the current filter">✓ Approve all shown</button>
+      <button id="btnRejectAll" class="ghost" title="Reject every photo in the current filter">✕ Reject all shown</button>
       <button id="btnUnpair" class="ghost" hidden title="Remove this manual pair and re-run auto-pairing">🔗 Unpair</button>
       <button id="btnSwap" class="ghost" hidden title="Swap which photo is Before vs After">⇄ Swap before/after (S)</button>
     </div>
@@ -182,6 +184,7 @@ kbd{background:#07130d;border:1px solid var(--line);border-radius:5px;padding:1p
         <option value="status">Status</option>
         <option value="rating">Rating</option>
       </select>
+      <button id="btnSelectAll" class="ghost" title="Select every photo in the current filter">Select all</button>
     </div>
     <div class="grid" id="grid"></div>
   </div>

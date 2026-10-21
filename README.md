@@ -33,6 +33,8 @@ Then visit http://localhost:8080/ (or just open `index.html` in a browser).
   flip the pair's roles with one click. The swap is pinned, survives rebuilds,
   shows a "swapped by hand" caption, and is itself undoable (Ctrl+Z).
 - **Next unreviewed** button jumps to the next pair with unreviewed photos.
+- **Approve/Reject all shown** applies a status to every photo in the current
+  filter at once (with a confirm step).
 - **Grid performance**: large photo sets render in chunks of 120 with a
   "Load more" button instead of dumping everything into the DOM at once.
 - **Keyboard shortcuts**: `←`/`→` navigate pairs, `1`–`5` star rating,
@@ -45,7 +47,7 @@ Then visit http://localhost:8080/ (or just open `index.html` in a browser).
   dialog roles with focus moved in and restored on close, labeled controls.
 - **Grid view**: all photos with status badges and ratings, multi-select for
   batch approve/reject/flag/rate, status filters, filename + note search,
-  sort by filename / status / rating.
+  sort by filename / status / rating, Select-all button.
 - **Persistence**: marks, ratings and notes live in the browser's
   localStorage (per device). Old v1 reviewed/flagged marks migrate
   automatically. Undo stack (50 steps) covers every change.
