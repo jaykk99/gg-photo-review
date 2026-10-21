@@ -65,9 +65,17 @@ button.on{background:var(--acc);color:#06281a;border-color:var(--acc)}
 .nav-row{display:flex;align-items:center;justify-content:space-between;gap:10px;margin:16px 0}
 .nav-row .pos{font-size:14px;color:var(--dim)}
 .pair-actions{display:flex;gap:8px;flex-wrap:wrap;justify-content:center;margin-top:4px}
+.nav-row .pos.method{font-style:italic;font-size:12px}
+/* skip link: visible only on keyboard focus */
+.skip{position:absolute;left:-999px;top:0;background:var(--acc);color:#06281a;font-weight:700;padding:10px 16px;border-radius:0 0 10px 0;z-index:300}
+.skip:focus{left:0}
+/* chunked grid load-more */
+.loadmore{grid-column:1/-1;justify-self:center;margin-top:6px}
 .kbd-hint{font-size:12px;color:var(--dim);text-align:center;margin-top:14px}
 kbd{background:#07130d;border:1px solid var(--line);border-radius:5px;padding:1px 7px;font-size:11px;font-family:monospace}
 /* grid view */
+#gridview .grid-tools{display:flex;align-items:center;gap:8px;margin-bottom:10px;font-size:13px;color:var(--dim)}
+#gridview .grid-tools select{background:#07130d;border:1px solid var(--line);color:var(--txt);border-radius:8px;padding:6px 10px;font-size:13px}
 #gridview .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:14px}
 .sheet{background:var(--panel);border:1px solid var(--line);border-radius:14px;overflow:hidden;cursor:pointer;transition:.15s;position:relative}
 .sheet:hover{border-color:var(--acc);transform:translateY(-2px)}
@@ -106,6 +114,7 @@ kbd{background:#07130d;border:1px solid var(--line);border-radius:5px;padding:1p
 </style>
 </head>
 <body>
+<a class="skip" href="#viewer">Skip to photo viewer</a>
 <div class="wrap">
   <header class="top">
     <h1>📷 GG Photo Review<span class="sub-t">Gutter Genie job photos</span></h1>
@@ -115,6 +124,10 @@ kbd{background:#07130d;border:1px solid var(--line);border-radius:5px;padding:1p
       <button class="ghost" id="btnAdd" title="Add photos from this device (session only)">＋ Add photos</button>
       <button class="ghost" id="btnJSON" title="Download picks as JSON">⬇ JSON</button>
       <button class="ghost" id="btnCSV" title="Download picks as CSV">⬇ CSV</button>
+      <button class="ghost" id="btnMD" title="Download review report as Markdown">⬇ MD</button>
+      <button class="ghost" id="btnSheet" title="Download printable HTML contact sheet of picks">⬇ Sheet</button>
+      <button class="ghost" id="btnSave" title="Save review session (marks, ratings, notes, manual pairs) as JSON">💾 Save session</button>
+      <button class="ghost" id="btnLoad" title="Load a saved review session from JSON">📂 Load session</button>
       <button class="ghost" id="btnReset">Reset</button>
     </div>
   </header>
@@ -137,27 +150,39 @@ kbd{background:#07130d;border:1px solid var(--line);border-radius:5px;padding:1p
       <button class="chip" data-f="rejected">Rejected</button>
       <button class="chip" data-f="flagged">Flagged</button>
     </div>
-    <input id="search" placeholder="Search filename…">
+    <input id="search" placeholder="Search filename or note…">
   </div>
 
   <div id="reviewview">
     <div class="nav-row">
-      <button id="btnPrev" class="ghost">◀ Prev</button>
+      <button id="btnPrev" class="ghost" aria-label="Previous pair">◀ Prev</button>
       <span class="pos" id="pairPos"></span>
-      <button id="btnNext" class="ghost">Next ▶</button>
+      <span class="pos method" id="pairMethod" title="How this pair was formed"></span>
+      <button id="btnNext" class="ghost" aria-label="Next pair">Next ▶</button>
     </div>
-    <div id="viewer"></div>
+    <div id="viewer" tabindex="-1" aria-label="Photo pair viewer"></div>
     <div class="pair-actions">
       <button id="btnFs" class="ghost">⤢ Fullscreen (F)</button>
+      <button id="btnSkip" class="ghost" title="Jump to the next pair with unreviewed photos">⏭ Next unreviewed</button>
       <button id="btnApprovePair">✓ Approve pair (⇧A)</button>
       <button id="btnRejectPair" class="ghost">✕ Reject pair (⇧R)</button>
       <button id="btnFlagPair" class="ghost">🚩 Flag pair (⇧X)</button>
       <button id="btnClearPair" class="ghost">Clear (⇧C)</button>
+      <button id="btnUnpair" class="ghost" hidden title="Remove this manual pair and re-run auto-pairing">🔗 Unpair</button>
+      <button id="btnSwap" class="ghost" hidden title="Swap which photo is Before vs After">⇄ Swap before/after (S)</button>
     </div>
-    <div class="kbd-hint"><kbd>←</kbd><kbd>→</kbd> navigate · <kbd>1</kbd>–<kbd>5</kbd> rate · <kbd>A</kbd>/<kbd>R</kbd>/<kbd>X</kbd> mark focused photo (hold <kbd>Shift</kbd> for pair) · <kbd>0</kbd> clear rating · <kbd>F</kbd> fullscreen · <kbd>?</kbd> help</div>
+    <div class="kbd-hint"><kbd>←</kbd><kbd>→</kbd> navigate · <kbd>1</kbd>–<kbd>5</kbd> rate · <kbd>A</kbd>/<kbd>R</kbd>/<kbd>X</kbd> mark focused photo (hold <kbd>Shift</kbd> for pair) · <kbd>0</kbd> clear rating · <kbd>S</kbd> swap before/after · <kbd>F</kbd> fullscreen · <kbd>?</kbd> help<br>In Grid view, select exactly 2 photos and hit <b>🔗 Pair selected</b> to pin them as a manual before/after pair (first selected = before).</div>
   </div>
 
   <div id="gridview" style="display:none">
+    <div class="grid-tools">
+      <label for="gridSort">Sort:</label>
+      <select id="gridSort">
+        <option value="name">Filename</option>
+        <option value="status">Status</option>
+        <option value="rating">Rating</option>
+      </select>
+    </div>
     <div class="grid" id="grid"></div>
   </div>
 </div>
@@ -167,19 +192,20 @@ kbd{background:#07130d;border:1px solid var(--line);border-radius:5px;padding:1p
   <button id="bApprove">✓ Approve</button>
   <button id="bReject" class="ghost">✕ Reject</button>
   <button id="bFlag" class="ghost">🚩 Flag</button>
-  <select id="bRate" style="background:#07130d;color:#fff;border:1px solid var(--line);border-radius:8px;padding:7px">
+  <button id="bPair" class="ghost" style="display:none" title="Pin the 2 selected photos as a before/after pair (first selected = before)">🔗 Pair selected</button>
+  <select id="bRate" style="background:#07130d;color:#fff;border:1px solid var(--line);border-radius:8px;padding:7px" aria-label="Set rating for selected photos">
     <option value="">Set rating…</option><option>5</option><option>4</option><option>3</option><option>2</option><option>1</option><option value="0">Clear</option>
   </select>
   <button id="bClear" class="ghost">Clear selection</button>
 </div>
 
-<div class="overlay" id="zoomOv">
-  <button class="x" id="zoomX">✕</button>
+<div class="overlay" id="zoomOv" role="dialog" aria-modal="true" aria-label="Zoomed photo">
+  <button class="x" id="zoomX" aria-label="Close zoom">✕</button>
   <img id="zoomImg" alt="Zoomed photo">
   <div class="fname" id="zoomCap" style="margin-top:10px"></div>
 </div>
 
-<div class="overlay" id="helpOv">
+<div class="overlay" id="helpOv" role="dialog" aria-modal="true" aria-label="Keyboard shortcuts">
   <div class="help-card">
     <h2>⌨ Keyboard shortcuts</h2>
     <table>
@@ -187,6 +213,7 @@ kbd{background:#07130d;border:1px solid var(--line);border-radius:5px;padding:1p
       <tr><td><kbd>1</kbd>–<kbd>5</kbd></td><td>Star rating for focused photo</td></tr>
       <tr><td><kbd>0</kbd></td><td>Clear rating</td></tr>
       <tr><td><kbd>A</kbd> / <kbd>R</kbd> / <kbd>X</kbd></td><td>Approve / Reject / Flag focused photo</td></tr>
+      <tr><td><kbd>S</kbd></td><td>Swap before/after roles for this pair</td></tr>
       <tr><td><kbd>⇧A</kbd> <kbd>⇧R</kbd> <kbd>⇧X</kbd></td><td>Same, applied to the whole pair</td></tr>
       <tr><td><kbd>⇧C</kbd></td><td>Clear pair marks</td></tr>
       <tr><td><kbd>F</kbd></td><td>Toggle fullscreen viewer</td></tr>
@@ -199,8 +226,9 @@ kbd{background:#07130d;border:1px solid var(--line);border-radius:5px;padding:1p
   </div>
 </div>
 
-<div id="toasts"></div>
+<div id="toasts" aria-live="polite" role="status"></div>
 <input type="file" id="fileInput" accept="image/*" multiple style="display:none">
+<input type="file" id="sessionInput" accept="application/json,.json" style="display:none">
 <script src="logic.js"></script>
 <script src="app.js"></script>
 </body>

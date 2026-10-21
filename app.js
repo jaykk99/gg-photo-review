@@ -26,6 +26,7 @@ function esc(s) {
 var items = [];          // [{id,name,src,upload}]
 var pairs = [];          // from L.pairPhotos
 var state = {};          // {id:{status,rating,note,at}}
+var manualPairs = [];    // [{before, after}] item ids paired by hand (persisted)
 var view = 'review';
 var filter = 'all';
 var search = '';
@@ -33,6 +34,8 @@ var pairIdx = 0;
 var focusedId = null;
 var selection = new Set();
 var undo = L.createUndo(50);
+var gridLimit = 120;     // chunked grid rendering for large sets
+var GRID_CHUNK = 120;
 
 function readState() {
   try {
@@ -48,6 +51,12 @@ function readState() {
 }
 function save() {
   try { localStorage.setItem(LS_KEY, JSON.stringify(state)); } catch (e) {}
+}
+function savePairs() {
+  try { localStorage.setItem('gg_photo_review_manual_pairs', JSON.stringify(manualPairs)); } catch (e) {}
+}
+function readPairs() {
+  try { return JSON.parse(localStorage.getItem('gg_photo_review_manual_pairs') || '[]'); } catch (e) { return []; }
 }
 
 function addManifestItems() {
@@ -77,7 +86,13 @@ function probeExtraSheets() {
 }
 
 function rebuild() {
-  pairs = L.pairPhotos(items.map(function (it) { return { id: it.id, name: it.name }; }));
+  // drop manual pairs whose photos are gone (e.g. last session's uploads)
+  var ids = {};
+  items.forEach(function (it) { ids[it.id] = true; });
+  var before = manualPairs.length;
+  manualPairs = manualPairs.filter(function (mp) { return ids[mp.before] && ids[mp.after]; });
+  if (manualPairs.length !== before) savePairs();
+  pairs = L.pairPhotos(items.map(function (it) { return { id: it.id, name: it.name }; }), manualPairs);
   if (pairIdx >= filteredPairs().length) pairIdx = Math.max(0, filteredPairs().length - 1);
   var fps = filteredPairs();
   if (fps.length && !fps[pairIdx]) pairIdx = 0;
@@ -97,11 +112,18 @@ function pairOfItem(id) {
 }
 
 // ---------- filtering ----------
+var gridSort = 'name'; // name | status | rating
 function itemMatches(it) {
   var st = L.getState(state, it.id).status;
   if (filter !== 'all' && st !== filter) return false;
-  if (search && it.name.toLowerCase().indexOf(search) === -1) return false;
+  if (search) {
+    var hay = (it.name + ' ' + L.getState(state, it.id).note).toLowerCase();
+    if (hay.indexOf(search) === -1) return false;
+  }
   return true;
+}
+function nameCompare(a, b) {
+  return String(a.name).localeCompare(String(b.name), undefined, { numeric: true });
 }
 function filteredPairs() {
   if (filter === 'all' && !search) return pairs;
@@ -109,11 +131,25 @@ function filteredPairs() {
     return L.pairPhotosOf(p).some(itemMatches);
   });
 }
-function filteredItems() { return items.filter(itemMatches); }
+function filteredItems() {
+  var list = items.filter(itemMatches);
+  if (gridSort === 'rating') {
+    list.sort(function (a, b) {
+      return L.getState(state, b.id).rating - L.getState(state, a.id).rating || nameCompare(a, b);
+    });
+  } else if (gridSort === 'status') {
+    list.sort(function (a, b) {
+      return String(L.getState(state, a.id).status).localeCompare(String(L.getState(state, b.id).status)) || nameCompare(a, b);
+    });
+  } else {
+    list.sort(nameCompare);
+  }
+  return list;
+}
 
 // ---------- mutations ----------
 function applyChange(label, ids, patch) {
-  undo.push(label, state);
+  undo.push(label, state, manualPairs);
   ids.forEach(function (id) {
     var r = L.setPhotoState(state, id, patch);
     state = r.state;
@@ -135,7 +171,9 @@ function markFocused(patch, pairWide, verb) {
 function doUndo() {
   var u = undo.pop();
   if (!u) return;
-  state = u.state; save(); render();
+  state = u.state;
+  if (u.mpairs !== undefined) { manualPairs = u.mpairs; savePairs(); }
+  save(); rebuild();
   toast('Undid: ' + u.label, false);
 }
 
@@ -175,6 +213,37 @@ function exportCSV() {
   var payload = L.buildExport(state, items, pairs);
   download('gg-picks-' + stamp() + '.csv', L.exportCSV(payload), 'text/csv');
   toast('Exported picks as CSV', false);
+}
+function exportMarkdown() {
+  var payload = L.buildExport(state, items, pairs);
+  download('gg-report-' + stamp() + '.md', L.exportMarkdown(payload), 'text/markdown');
+  toast('Exported review report as Markdown', false);
+}
+function exportContactSheet() {
+  var payload = L.buildExport(state, items, pairs);
+  download('gg-contact-sheet-' + stamp() + '.html', L.exportContactSheetHTML(payload), 'text/html');
+  toast('Exported printable contact sheet (HTML)', false);
+}
+function saveSession() {
+  download('gg-session-' + stamp() + '.json', L.serializeSession(state, manualPairs), 'application/json');
+  toast('Session saved: marks, ratings, notes and manual pairs', false);
+}
+function loadSessionFile(file) {
+  if (!file) return;
+  var reader = new FileReader();
+  reader.onload = function () {
+    var res = L.deserializeSession(reader.result);
+    if (!res.ok) { toast('Could not load session: ' + res.error, false); return; }
+    var hasWork = Object.keys(state).length > 0;
+    if (hasWork && !confirm('Loading this session replaces your current marks, ratings, notes and manual pairs. Continue?')) return;
+    undo.push('Loaded session', state, manualPairs);
+    state = res.state;
+    manualPairs = res.manualPairs;
+    save(); savePairs(); pairIdx = 0; focusedId = null; selection.clear();
+    rebuild();
+    toast('Session loaded: ' + L.reviewedCount(state, items) + ' reviewed photos restored', true);
+  };
+  reader.readAsText(file);
 }
 
 // ---------- render ----------
@@ -259,7 +328,7 @@ function photoCard(it, role) {
   // note (undo pushed once per edit via change event)
   var ta = card.querySelector('[data-note]');
   ta.addEventListener('change', function () {
-    undo.push('Edited note: ' + it.name, state);
+    undo.push('Edited note: ' + it.name, state, manualPairs);
     var r = L.setPhotoState(state, it.id, { note: ta.value });
     state = r.state; save(); renderProgress();
   });
@@ -287,12 +356,26 @@ function renderViewer() {
     v.appendChild(photoCard(itemById(p.id), role));
   });
   $('#pairPos').textContent = 'Pair ' + (pairIdx + 1) + ' of ' + fps.length;
+  $('#pairMethod').textContent = L.pairMethodCaption(pair);
+  var isPinned = pair.method === 'manual' || pair.method === 'swapped';
+  $('#btnUnpair').hidden = !isPinned;
+  $('#btnUnpair').textContent = pair.method === 'swapped' ? '↩ Unswap' : '🔗 Unpair';
+  $('#btnSwap').hidden = !!pair.single;
+  $('#btnSwap').textContent = pair.method === 'swapped' ? '↩ Unswap (S)' : '⇄ Swap before/after (S)';
 }
 
+// Grid renders in chunks so large photo sets (500+) stay smooth.
+// filteredItems() is sliced to gridLimit; a "Load more" button grows it.
 function renderGrid() {
   var g = $('#grid');
   g.innerHTML = '';
-  filteredItems().forEach(function (it) {
+  var all = filteredItems();
+  if (!all.length) {
+    g.innerHTML = '<p class="hint">Nothing here. Add photos or change the filter.</p>';
+    return;
+  }
+  var shown = all.slice(0, gridLimit);
+  shown.forEach(function (it) {
     var st = L.getState(state, it.id);
     var card = el('div', 'sheet' + (selection.has(it.id) ? ' sel' : ''));
     card.innerHTML =
@@ -318,14 +401,21 @@ function renderGrid() {
     });
     g.appendChild(card);
   });
-  if (!filteredItems().length) g.innerHTML = '<p class="hint">Nothing here. Add photos or change the filter.</p>';
+  if (all.length > shown.length) {
+    var more = el('button', 'loadmore', 'Load ' + Math.min(GRID_CHUNK * 2, all.length - shown.length) + ' more (' + (all.length - shown.length) + ' left)');
+    more.addEventListener('click', function () { gridLimit += GRID_CHUNK * 2; renderGrid(); });
+    g.appendChild(more);
+  }
 }
+function resetGridLimit() { gridLimit = GRID_CHUNK; }
 
 function renderBatchBar() {
   var bar = $('#batchbar');
   if (view === 'grid' && selection.size) {
     bar.classList.add('show');
     $('#batchCount').textContent = selection.size + ' selected';
+    // manual pairing only makes sense with exactly 2 photos selected
+    $('#bPair').style.display = selection.size === 2 ? '' : 'none';
   } else bar.classList.remove('show');
 }
 
@@ -340,20 +430,57 @@ function setView(v) {
   view = v;
   $('#tabReview').classList.toggle('on', v === 'review');
   $('#tabGrid').classList.toggle('on', v === 'grid');
+  if (v === 'grid') resetGridLimit();
   render();
 }
 
 // ---------- overlays / fullscreen ----------
-function openZoom(it) {
-  $('#zoomImg').src = it.src;
-  $('#zoomCap').textContent = it.name;
-  $('#zoomOv').classList.add('show');
+// Focus is moved into a dialog when it opens and restored when it closes,
+// so keyboard and screen-reader users don't get lost.
+var lastFocus = null;
+var zoomList = [];   // item objects of the pair being zoomed
+var zoomIdx = 0;
+function stashFocus() { lastFocus = document.activeElement; }
+function restoreFocus() {
+  if (lastFocus && document.contains(lastFocus)) lastFocus.focus();
+  lastFocus = null;
 }
-function closeZoom() { $('#zoomOv').classList.remove('show'); }
+function openZoom(it) {
+  stashFocus();
+  var pair = filteredPairs()[pairIdx];
+  zoomList = pair ? L.pairPhotosOf(pair) : [it];
+  zoomIdx = 0;
+  for (var i = 0; i < zoomList.length; i++) {
+    if (zoomList[i].id === it.id) { zoomIdx = i; break; }
+  }
+  showZoom();
+}
+function showZoom() {
+  var raw = zoomList[zoomIdx];
+  var it = (raw && itemById(raw.id)) || raw;
+  if (!it) return;
+  $('#zoomImg').src = it.src;
+  $('#zoomCap').textContent = it.name + ' (' + (zoomIdx + 1) + ' of ' + zoomList.length + ')';
+  $('#zoomOv').classList.add('show');
+  $('#zoomX').focus();
+}
+function stepZoom(d) {
+  if (zoomList.length < 2) return;
+  zoomIdx = (zoomIdx + d + zoomList.length) % zoomList.length;
+  showZoom();
+}
+function closeZoom() {
+  $('#zoomOv').classList.remove('show');
+  zoomList = [];
+  restoreFocus();
+}
 function toggleHelp(force) {
   var o = $('#helpOv');
   var show = force != null ? force : !o.classList.contains('show');
+  if (show && !o.classList.contains('show')) stashFocus();
   o.classList.toggle('show', show);
+  if (show) $('#helpClose').focus();
+  else restoreFocus();
 }
 function toggleFs() {
   var v = $('#viewer');
@@ -390,13 +517,14 @@ function bind() {
     var c = e.target.closest('.chip'); if (!c) return;
     filter = c.dataset.f;
     document.querySelectorAll('#filters .chip').forEach(function (x) { x.classList.toggle('on', x === c); });
-    pairIdx = 0; render();
+    pairIdx = 0; resetGridLimit(); render();
   });
   $('#search').addEventListener('input', function (e) {
-    search = e.target.value.trim().toLowerCase(); pairIdx = 0; render();
+    search = e.target.value.trim().toLowerCase(); pairIdx = 0; resetGridLimit(); render();
   });
   $('#btnPrev').onclick = function () { step(-1); };
   $('#btnNext').onclick = function () { step(1); };
+  $('#btnSkip').onclick = nextUnreviewed;
   $('#btnApprovePair').onclick = function () { markFocused({ status: 'approved' }, true, 'Approved pair'); };
   $('#btnRejectPair').onclick = function () { markFocused({ status: 'rejected' }, true, 'Rejected pair'); };
   $('#btnFlagPair').onclick = function () { markFocused({ status: 'flagged' }, true, 'Flagged pair'); };
@@ -405,6 +533,13 @@ function bind() {
   $('#btnUndo').onclick = doUndo;
   $('#btnJSON').onclick = exportJSON;
   $('#btnCSV').onclick = exportCSV;
+  $('#btnMD').onclick = exportMarkdown;
+  $('#btnSheet').onclick = exportContactSheet;
+  $('#btnSave').onclick = saveSession;
+  $('#btnLoad').onclick = function () { $('#sessionInput').click(); };
+  $('#sessionInput').addEventListener('change', function (e) { loadSessionFile(e.target.files[0]); e.target.value = ''; });
+  $('#btnUnpair').onclick = unpairManual;
+  $('#btnSwap').onclick = swapPair;
   $('#btnHelp').onclick = function () { toggleHelp(true); };
   $('#helpClose').onclick = function () { toggleHelp(false); };
   $('#helpOv').addEventListener('click', function (e) { if (e.target === this) toggleHelp(false); });
@@ -412,7 +547,7 @@ function bind() {
   $('#zoomOv').addEventListener('click', function (e) { if (e.target !== $('#zoomImg')) closeZoom(); });
   $('#btnReset').onclick = function () {
     if (!confirm('Clear all review marks, ratings and notes?')) return;
-    undo.push('Reset all marks', state);
+    undo.push('Reset all marks', state, manualPairs);
     state = {}; save(); selection.clear(); render();
     toast('All marks cleared', true);
   };
@@ -429,6 +564,12 @@ function bind() {
     e.target.value = '';
   });
   $('#bClear').onclick = function () { selection.clear(); render(); };
+  $('#bPair').onclick = pairSelected;
+
+  // grid sort
+  $('#gridSort').addEventListener('change', function (e) {
+    gridSort = e.target.value; resetGridLimit(); renderGrid();
+  });
 
   // drag & drop anywhere
   var dzT = null;
@@ -470,6 +611,12 @@ function bind() {
       return;
     }
     if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z') { e.preventDefault(); doUndo(); return; }
+    // zoomed lightbox: arrows move between the pair's photos
+    if ($('#zoomOv').classList.contains('show')) {
+      if (e.key === 'ArrowLeft') stepZoom(-1);
+      else if (e.key === 'ArrowRight') stepZoom(1);
+      return;
+    }
     if (view !== 'review') return;
     var k = e.key;
     if (k === 'ArrowLeft') { step(-1); }
@@ -484,11 +631,67 @@ function bind() {
       if (lk === 'a') markFocused({ status: 'approved' }, wide, wide ? 'Approved pair' : 'Approved');
       else if (lk === 'r') markFocused({ status: 'rejected' }, wide, wide ? 'Rejected pair' : 'Rejected');
       else if (lk === 'x') markFocused({ status: 'flagged' }, wide, wide ? 'Flagged pair' : 'Flagged');
+      else if (lk === 's') swapPair();
       else if (lk === 'c' && wide) markFocused({ status: 'unreviewed', rating: 0 }, true, 'Cleared pair');
     }
   });
 }
 
+// Manual pairing: pin two photos as a before/after pair (first selected = before).
+function pairSelected() {
+  var ids = Array.from(selection);
+  if (ids.length !== 2) return;
+  var exists = manualPairs.some(function (mp) {
+    return (mp.before === ids[0] && mp.after === ids[1]) ||
+           (mp.before === ids[1] && mp.after === ids[0]);
+  });
+  if (!exists) {
+    undo.push('Manual pair', state, manualPairs);
+    manualPairs.push({ before: ids[0], after: ids[1] });
+    savePairs();
+    var names = ids.map(function (id) { var it = itemById(id); return it ? it.name : id; });
+    toast('Paired by hand: ' + names[0] + ' (before) / ' + names[1] + ' (after)', true);
+  }
+  selection.clear();
+  rebuild();
+}
+// Swap which photo of the current pair is "before" vs "after".
+// Stored as a pinned entry so it survives rebuilds; toggling again removes
+// it and lets the heuristics (or the manual pair) take over.
+function swapPair() {
+  var pair = filteredPairs()[pairIdx];
+  if (!pair || pair.single) return;
+  var b = pair.before.id, a = pair.after.id;
+  function covers(mp) {
+    return (mp.before === b && mp.after === a) || (mp.before === a && mp.after === b);
+  }
+  if (pair.method === 'swapped') {
+    undo.push('Unswapped pair', state, manualPairs);
+    manualPairs = manualPairs.filter(function (mp) { return !covers(mp); });
+    savePairs(); rebuild();
+    toast('Swap removed', false);
+    return;
+  }
+  undo.push('Swapped before/after', state, manualPairs);
+  manualPairs = manualPairs.filter(function (mp) { return !covers(mp); });
+  manualPairs.push({ before: a, after: b, kind: 'swapped' });
+  savePairs();
+  rebuild();
+  toast('Before/after swapped', true);
+}
+function unpairManual() {
+  var pair = filteredPairs()[pairIdx];
+  if (!pair || (pair.method !== 'manual' && pair.method !== 'swapped')) return;
+  var wasSwapped = pair.method === 'swapped';
+  var b = pair.before.id, a = pair.after.id;
+  undo.push(wasSwapped ? 'Unswapped pair' : 'Unpaired manual pair', state, manualPairs);
+  manualPairs = manualPairs.filter(function (mp) {
+    return !((mp.before === b && mp.after === a) || (mp.before === a && mp.after === b));
+  });
+  savePairs();
+  rebuild();
+  toast(wasSwapped ? 'Swap removed' : 'Manual pair removed, heuristics re-applied', false);
+}
 function step(d) {
   var fps = filteredPairs();
   if (!fps.length) return;
@@ -496,6 +699,20 @@ function step(d) {
   focusedId = null;
   renderViewer();
   renderProgress();
+}
+// Jump to the next pair that still has unreviewed photos (wraps around).
+function nextUnreviewed() {
+  var fps = filteredPairs();
+  if (!fps.length) return;
+  for (var n = 1; n <= fps.length; n++) {
+    var i = (pairIdx + n) % fps.length;
+    if (!L.pairReviewed(state, fps[i])) {
+      pairIdx = i; focusedId = null;
+      renderViewer(); renderProgress();
+      return;
+    }
+  }
+  toast('All pairs reviewed', false);
 }
 function rateFocused(n) {
   var pair = filteredPairs()[pairIdx];
@@ -509,6 +726,7 @@ function rateFocused(n) {
 function boot() {
   addManifestItems();
   state = readState();
+  manualPairs = readPairs();
   bind();
   rebuild();          // renders once
   probeExtraSheets(); // finds more sheet_NN.jpg in the background

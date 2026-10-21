@@ -149,3 +149,140 @@ test('migrateV1 converts old reviewed/flagged marks', () => {
   assert.equal(out['sheet_01.jpg'].status, 'flagged');
   assert.equal(out['sheet_00.jpg'].rating, 0);
 });
+
+test('pairPhotos honors manual pairs first (method manual)', () => {
+  const pairs = L.pairPhotos(
+    [it('a', 'gutter_before.jpg'), it('b', 'gutter_after.jpg'),
+     it('c', 'random-a.jpg'), it('d', 'oddball.jpg')],
+    [{ before: 'c', after: 'd' }]
+  );
+  const manual = pairs.find(p => p.method === 'manual');
+  assert.ok(manual);
+  assert.equal(manual.before.id, 'c');
+  assert.equal(manual.after.id, 'd');
+  // heuristic pass still pairs the keyword couple from the leftovers
+  const kw = pairs.find(p => p.method === 'keyword');
+  assert.ok(kw);
+  assert.equal(kw.before.id, 'a');
+});
+
+test('pairPhotos ignores invalid manual pairs', () => {
+  // unknown id + self-pair + pair reusing an id already used
+  const pairs = L.pairPhotos(
+    [it('a', 'x1.jpg'), it('b', 'x2.jpg')],
+    [{ before: 'nope', after: 'b' }, { before: 'a', after: 'a' }, { before: 'a', after: 'b' }]
+  );
+  const manual = pairs.find(p => p.method === 'manual');
+  assert.ok(manual);
+  assert.equal(pairs.filter(p => p.method === 'manual').length, 1);
+});
+
+test('pairMethodCaption describes every method', () => {
+  assert.ok(L.pairMethodCaption({ method: 'manual' }).includes('hand'));
+  assert.ok(L.pairMethodCaption({ method: 'keyword' }).includes('keywords'));
+  assert.ok(L.pairMethodCaption({ method: 'timestamp' }).includes('timestamps'));
+  assert.ok(L.pairMethodCaption({ method: 'sequence' }).includes('sequence'));
+  assert.ok(L.pairMethodCaption({ method: 'single' }).includes('Single'));
+});
+
+test('exportMarkdown builds a per-pair report', () => {
+  const items = [it('a', 'gutter_before.jpg'), it('b', 'gutter_after.jpg')];
+  const pairs = L.pairPhotos(items);
+  let state = L.setPhotoState({}, 'a', { status: 'approved', rating: 5, note: 'great' }).state;
+  const exp = L.buildExport(state, items, pairs);
+  const md = L.exportMarkdown(exp);
+  assert.ok(md.startsWith('# Photo review report'));
+  assert.ok(md.includes('Approved: 1'));
+  assert.ok(md.includes('## Pair 1'));
+  assert.ok(md.includes('`gutter_before.jpg`'));
+  assert.ok(md.includes('★★★★★'));
+  assert.ok(md.includes('_great_'));
+  assert.ok(md.includes('— rejected') || md.includes('unreviewed'));
+});
+
+test('exportContactSheetHTML prefers approved picks', () => {
+  const items = [it('a', 'gutter_before.jpg'), it('b', 'gutter_after.jpg'), it('c', 'lone.jpg')];
+  const pairs = L.pairPhotos(items);
+  let state = L.setPhotoState({}, 'a', { status: 'approved', rating: 5 }).state;
+  state = L.setPhotoState(state, 'b', { status: 'rejected' }).state;
+  const exp = L.buildExport(state, items, pairs);
+  const html = L.exportContactSheetHTML(exp);
+  assert.ok(html.startsWith('<!DOCTYPE html>'));
+  assert.ok(html.includes('Approved picks'));
+  assert.ok(html.includes('gutter_before.jpg'));
+  assert.ok(!html.includes('lone.jpg')); // unreviewed, excluded
+  // no approvals -> falls back to all reviewed picks
+  const state2 = L.setPhotoState({}, 'c', { status: 'flagged' }).state;
+  const html2 = L.exportContactSheetHTML(L.buildExport(state2, items, pairs));
+  assert.ok(html2.includes('Reviewed picks'));
+  assert.ok(html2.includes('lone.jpg'));
+});
+
+test('exportContactSheetHTML escapes HTML in filenames and notes', () => {
+  const exp = {
+    exportedAt: 'x',
+    totals: { approved: 1 },
+    picks: [
+      { file: 'a<b>&".jpg', pair: 'p', role: 'before', status: 'approved', rating: 0, note: '<script>alert(1)</script>', reviewedAt: null },
+    ]
+  };
+  const html = L.exportContactSheetHTML(exp);
+  assert.ok(!html.includes('<script>alert(1)</script>'));
+  assert.ok(html.includes('&lt;script&gt;'));
+  assert.ok(html.includes('a&lt;b&gt;&amp;&quot;.jpg'));
+});
+
+test('serializeSession / deserializeSession round-trip', () => {
+  let state = L.setPhotoState({}, 'a', { status: 'approved', rating: 5, note: 'great' }).state;
+  const mp = [{ before: 'a', after: 'b' }];
+  const text = L.serializeSession(state, mp);
+  const res = L.deserializeSession(text);
+  assert.equal(res.ok, true);
+  assert.equal(res.state.a.status, 'approved');
+  assert.equal(res.state.a.rating, 5);
+  assert.equal(res.state.a.note, 'great');
+  assert.deepEqual(res.manualPairs, mp);
+});
+
+test('deserializeSession sanitizes junk and rejects bad files', () => {
+  assert.equal(L.deserializeSession('not json').ok, false);
+  assert.equal(L.deserializeSession('{"app":"other"}').ok, false);
+  assert.equal(L.deserializeSession('{"app":"gg-photo-review"}').ok, false);
+  const res = L.deserializeSession(JSON.stringify({
+    app: 'gg-photo-review', v: 1,
+    state: {
+      a: { status: 'approved', rating: 99, note: 'x'.repeat(5000) },
+      b: { status: 'bogus', rating: -3 },
+      c: 'garbage',
+    },
+    manualPairs: [{ before: 'a', after: 'a' }, { before: 'a' }, 'x', { before: 'a', after: 'b' }],
+  }));
+  assert.equal(res.ok, true);
+  assert.equal(res.state.a.rating, 5, 'rating clamped');
+  assert.equal(res.state.a.note.length, 2000, 'note truncated');
+  assert.equal(res.state.b.status, 'unreviewed', 'bad status reset');
+  assert.equal(res.state.b.rating, 0);
+  assert.deepEqual(res.manualPairs, [{ before: 'a', after: 'b' }], 'only valid pairs kept');
+});
+
+test('pairPhotos supports swapped kind (before/after flipped by hand)', () => {
+  const pairs = L.pairPhotos(
+    [it('a', 'gutter_before.jpg'), it('b', 'gutter_after.jpg')],
+    [{ before: 'b', after: 'a', kind: 'swapped' }]
+  );
+  assert.equal(pairs.length, 1);
+  assert.equal(pairs[0].method, 'swapped');
+  assert.equal(pairs[0].before.id, 'b');
+  assert.equal(pairs[0].after.id, 'a');
+  assert.ok(L.pairMethodCaption(pairs[0]).includes('swapped'));
+});
+
+test('createUndo snapshots manual pairs and restores them on pop', () => {
+  const u = L.createUndo(10);
+  u.push('swap', { a: 1 }, [{ before: 'x', after: 'y', kind: 'swapped' }]);
+  const popped = u.pop();
+  assert.deepEqual(popped.mpairs, [{ before: 'x', after: 'y', kind: 'swapped' }]);
+  // mutating the popped copy must not corrupt the stored snapshot
+  u.push('plain', { a: 2 });
+  assert.equal(u.pop().mpairs, undefined, 'entries without mpairs leave them alone');
+});
