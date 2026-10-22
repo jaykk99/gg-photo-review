@@ -1,4 +1,4 @@
-/* Unit tests for gg-photo-review logic.js — run with: node --test test/ */
+/* Unit tests for gg-photo-review logic.js — run with: node --test "test/*.test.js" */
 'use strict';
 const test = require('node:test');
 const assert = require('node:assert/strict');
