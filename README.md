@@ -1,6 +1,8 @@
+Live: https://jaykk99.github.io/gg-photo-review/
+
 # gg-photo-review
 
-Live: **https://jaykk99.github.io/gg-photo-review/**
+Live: https://jaykk99.github.io/gg-photo-review/
 
 Gutter Genie job photo review tool: review before/after photo pairs side by
 side, rate and approve the best shots (for quotes, marketing, customer
